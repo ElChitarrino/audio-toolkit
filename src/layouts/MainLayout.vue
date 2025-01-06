@@ -1,7 +1,7 @@
 <template>
   <q-layout view="lHh Lpr lFf">
     <q-header elevated>
-      <q-toolbar>
+      <q-toolbar class="bg-black text-white">
         <q-btn
           flat
           dense
@@ -12,10 +12,49 @@
         />
 
         <q-toolbar-title>
-          Quasar App
+          Audio Toolkit
         </q-toolbar-title>
 
-        <div>Quasar v{{ $q.version }}</div>
+        <div>
+          <q-btn-dropdown
+            split
+            color="grey-8"
+            push
+            glossy
+            no-caps
+            icon="settings"
+            label=""
+            @click="onMainClick"
+          >
+            <q-list>
+              <q-item clickable v-close-popup @click="onItemClick">
+                <q-item-section avatar>
+                  <q-avatar icon="person" color="primary" text-color="white" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label>Person</q-item-label>
+                  <q-item-label caption>February 22, 2016</q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <q-icon name="info" color="amber" />
+                </q-item-section>
+              </q-item>
+
+              <q-item clickable v-close-popup @click="onItemClick">
+                <q-item-section avatar>
+                  <q-avatar icon="sentiment_very_satisfied" color="secondary" text-color="white" />
+                </q-item-section>
+                <q-item-section>
+                  <q-item-label>Vacation</q-item-label>
+                  <q-item-label caption>February 22, 2016</q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <q-icon name="info" color="amber" />
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </q-btn-dropdown>
+        </div>
       </q-toolbar>
     </q-header>
 
