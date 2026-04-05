@@ -1,80 +1,98 @@
 <template>
   <q-layout view="lHh Lpr lFf">
-    <q-header elevated>
-      <q-toolbar class="bg-black text-white">
+    <q-header elevated class="bg-dark-header">
+      <q-toolbar>
         <q-btn
-          flat
-          dense
-          round
+          flat dense round
           icon="menu"
           aria-label="Menu"
-          @click="toggleLeftDrawer"
+          @click="toggleDrawer"
         />
-
-        <q-toolbar-title>
+        <q-avatar size="32px" class="q-mr-sm">
+          <img src="../assets/logoLessBorders.png" />
+        </q-avatar>
+        <q-toolbar-title class="text-weight-bold">
           Audio Toolkit
         </q-toolbar-title>
 
-        <div>
-          <q-btn-dropdown
-            split
-            color="grey-8"
-            push
-            glossy
-            no-caps
-            icon="settings"
-            label=""
-            @click="onMainClick"
-          >
-            <q-list>
-              <q-item clickable v-close-popup @click="onItemClick">
-                <q-item-section avatar>
-                  <q-avatar icon="person" color="primary" text-color="white" />
-                </q-item-section>
-                <q-item-section>
-                  <q-item-label>Person</q-item-label>
-                  <q-item-label caption>February 22, 2016</q-item-label>
-                </q-item-section>
-                <q-item-section side>
-                  <q-icon name="info" color="amber" />
-                </q-item-section>
-              </q-item>
-
-              <q-item clickable v-close-popup @click="onItemClick">
-                <q-item-section avatar>
-                  <q-avatar icon="sentiment_very_satisfied" color="secondary" text-color="white" />
-                </q-item-section>
-                <q-item-section>
-                  <q-item-label>Vacation</q-item-label>
-                  <q-item-label caption>February 22, 2016</q-item-label>
-                </q-item-section>
-                <q-item-section side>
-                  <q-icon name="info" color="amber" />
-                </q-item-section>
-              </q-item>
-            </q-list>
-          </q-btn-dropdown>
-        </div>
+        <q-tabs
+          v-model="activeTab"
+          dense
+          no-caps
+          indicator-color="primary"
+          class="gt-xs"
+        >
+          <q-route-tab name="home"      to="/"          icon="home"      label="Home" />
+          <q-route-tab name="analyze"   to="/analyze"   icon="analytics" label="Analyze" />
+          <q-route-tab name="metronome" to="/metronome" icon="timer"     label="Metronome" />
+        </q-tabs>
       </q-toolbar>
     </q-header>
 
     <q-drawer
-      v-model="leftDrawerOpen"
+      v-model="drawerOpen"
       show-if-above
       bordered
+      :width="220"
+      class="bg-dark-drawer"
     >
-      <q-list>
-        <q-item-label
-          header
-        >
-          Essential Links
-        </q-item-label>
+      <q-list padding>
+        <q-item-label header class="text-grey-5 text-caption">Navigation</q-item-label>
 
-        <EssentialLink
-          v-for="link in linksList"
-          :key="link.title"
-          v-bind="link"
-        />
+        <q-item clickable v-ripple to="/" exact active-class="drawer-active">
+          <q-item-section avatar><q-icon name="home" /></q-item-section>
+          <q-item-section>Home</q-item-section>
+        </q-item>
+
+        <q-item clickable v-ripple to="/analyze" active-class="drawer-active">
+          <q-item-section avatar><q-icon name="analytics" /></q-item-section>
+          <q-item-section>Analyze</q-item-section>
+        </q-item>
+
+        <q-item clickable v-ripple to="/metronome" active-class="drawer-active">
+          <q-item-section avatar><q-icon name="timer" /></q-item-section>
+          <q-item-section>Metronome</q-item-section>
+        </q-item>
+
+        <q-separator class="q-my-md" />
+
+        <q-item-label header class="text-grey-5 text-caption">Status</q-item-label>
+
+        <q-item dense>
+          <q-item-section avatar>
+            <q-icon
+              :name="audioStore.hasAudio ? 'music_note' : 'music_off'"
+              :color="audioStore.hasAudio ? 'positive' : 'grey-7'"
+            />
+          </q-item-section>
+          <q-item-section>
+            <q-item-label caption :class="audioStore.hasAudio ? 'text-positive' : 'text-grey-6'">
+              {{ audioStore.hasAudio ? 'Audio loaded' : 'No audio' }}
+            </q-item-label>
+          </q-item-section>
+        </q-item>
+
+        <q-item dense v-if="audioStore.bpm">
+          <q-item-section avatar>
+            <q-icon name="speed" color="secondary" />
+          </q-item-section>
+          <q-item-section>
+            <q-item-label caption class="text-secondary">
+              {{ audioStore.bpm }} BPM detected
+            </q-item-label>
+          </q-item-section>
+        </q-item>
+
+        <q-item dense v-if="audioStore.currentChord && audioStore.currentChord !== '—'">
+          <q-item-section avatar>
+            <q-icon name="piano" color="accent" />
+          </q-item-section>
+          <q-item-section>
+            <q-item-label caption class="text-accent">
+              Playing: {{ audioStore.currentChord }}
+            </q-item-label>
+          </q-item-section>
+        </q-item>
       </q-list>
     </q-drawer>
 
@@ -86,56 +104,28 @@
 
 <script setup>
 import { ref } from 'vue'
-import EssentialLink from 'components/EssentialLink.vue'
+import { useAudioStore } from 'src/stores/audioStore'
 
-const linksList = [
-  {
-    title: 'Docs',
-    caption: 'quasar.dev',
-    icon: 'school',
-    link: 'https://quasar.dev'
-  },
-  {
-    title: 'Github',
-    caption: 'github.com/quasarframework',
-    icon: 'code',
-    link: 'https://github.com/quasarframework'
-  },
-  {
-    title: 'Discord Chat Channel',
-    caption: 'chat.quasar.dev',
-    icon: 'chat',
-    link: 'https://chat.quasar.dev'
-  },
-  {
-    title: 'Forum',
-    caption: 'forum.quasar.dev',
-    icon: 'record_voice_over',
-    link: 'https://forum.quasar.dev'
-  },
-  {
-    title: 'Twitter',
-    caption: '@quasarframework',
-    icon: 'rss_feed',
-    link: 'https://twitter.quasar.dev'
-  },
-  {
-    title: 'Facebook',
-    caption: '@QuasarFramework',
-    icon: 'public',
-    link: 'https://facebook.quasar.dev'
-  },
-  {
-    title: 'Quasar Awesome',
-    caption: 'Community Quasar projects',
-    icon: 'favorite',
-    link: 'https://awesome.quasar.dev'
-  }
-]
+const drawerOpen = ref(false)
+const activeTab = ref('home')
+const audioStore = useAudioStore()
 
-const leftDrawerOpen = ref(false)
-
-function toggleLeftDrawer () {
-  leftDrawerOpen.value = !leftDrawerOpen.value
+function toggleDrawer() {
+  drawerOpen.value = !drawerOpen.value
 }
 </script>
+
+<style scoped>
+.bg-dark-header {
+  background: #0d0d1a;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.bg-dark-drawer {
+  background: #0f0f1e;
+  border-right: 1px solid rgba(255,255,255,0.06);
+}
+.drawer-active {
+  color: #7C3AED;
+  background: rgba(124,58,237,0.1);
+}
+</style>

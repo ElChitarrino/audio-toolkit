@@ -1,1 +1,74 @@
 // app global css in SCSS form
+
+body {
+  background: #0a0a14;
+  color: #e2e2e2;
+}
+
+.q-page {
+  background: transparent;
+}
+
+// Scrollbar styling
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: rgba(255,255,255,0.04); }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+
+// Search suggestions
+.suggestions {
+  list-style: none;
+  margin: 4px 0 0 0;
+  padding: 0;
+  background: #1a1a2e;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  position: relative;
+  z-index: 999;
+}
+
+.suggestions li {
+  display: flex;
+  align-items: center;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+  gap: 10px;
+
+  &:hover {
+    background: rgba(124,58,237,0.15);
+  }
+
+  img {
+    width: 60px;
+    height: 42px;
+    object-fit: cover;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+
+  span {
+    font-size: 0.875rem;
+    color: #d1d1d1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+// Quasar overrides for dark feel
+.q-toolbar {
+  min-height: 56px;
+}
+
+.q-field__control {
+  background: rgba(255,255,255,0.04) !important;
+}
+
+.q-btn-toggle {
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  overflow: hidden;
+}
