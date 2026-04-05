@@ -31,3 +31,16 @@ yarn-error.log*
 
 # local .env files
 .env.local*
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+.pytest_cache/
+
+# yt-dlp temp downloads
+/tmp/audiotk_*

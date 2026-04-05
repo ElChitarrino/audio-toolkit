@@ -4,43 +4,60 @@
 A Vue 3 + Quasar Framework web application for music enthusiasts. Search YouTube videos, download them as MP3, detect BPM/tempo, analyze chords in real-time, and practice with a built-in metronome.
 
 ## Tech Stack
-- **Frontend**: Vue 3 + Quasar Framework v2 (SPA, hash routing)
+- **Frontend**: Vue 3 + Quasar Framework v2 (SPA, hash routing) — port 5000
+- **Backend**: FastAPI (Python 3.11) + yt-dlp — port 8000
 - **Build Tool**: Vite (via @quasar/app-vite)
 - **State Management**: Pinia (`src/stores/audioStore.js`)
 - **Routing**: Vue Router — routes: `/`, `/analyze`, `/metronome`
-- **HTTP Client**: Axios (points to FastAPI backend at `localhost:8000`)
+- **HTTP Client**: Axios → `http://127.0.0.1:8000/audiorequester`
 - **Audio Analysis**: Meyda.js (chromagram for chord detection, energy for BPM)
-- **i18n**: Vue I18n
 - **Styling**: SCSS + Quasar components, dark music theme
 
+## Workflows
+- **"Start application"** — `npm run dev` → frontend on port 5000
+- **"Backend API"** — `uvicorn backend.main:app --host 0.0.0.0 --port 8000`
+
 ## Features
-- **YouTube Search** — Search videos via the FastAPI backend (requires backend running)
-- **BPM / Tempo Detection** — Offline analysis using Web Audio API + autocorrelation (client-side, no backend needed once MP3 is loaded)
-- **Chord Detection** — Real-time chromagram analysis via Meyda.js during playback; full chord progression timeline via offline analysis
-- **Metronome** — Standalone metronome with Web Audio API click track, visual pendulum, tap-tempo, time signature selector (2/4, 3/4, 4/4, 6/8), and "use detected BPM" shortcut
+- **YouTube Search** — via `GET /audiorequester/search?query=...` (yt-dlp `ytsearch10`)
+- **Audio Download** — via `GET /audiorequester/download?video_id=...` (returns MP3 blob via yt-dlp + ffmpeg)
+- **BPM / Tempo Detection** — client-side, Web Audio API + autocorrelation on energy envelope
+- **Chord Detection** — real-time Meyda.js chromagram + offline full-file analysis
+- **Metronome** — Web Audio API click track, visual pendulum, tap-tempo, time signatures
 
 ## Project Structure
-- `src/stores/audioStore.js` — Central Pinia store: video, audio blob/URL, BPM, chords, metronome state
-- `src/pages/IndexPage.vue` — Home: search, video selection, download trigger
-- `src/pages/AnalyzePage.vue` — Analysis: audio player, BPM display, chord timeline
-- `src/pages/MetronomePage.vue` — Standalone metronome
-- `src/components/AudioPlayer.vue` — HTML5 player + Meyda real-time analysis + offline BPM/chord detection
-- `src/components/SearchBar.vue` — YouTube search with debounce + backend error handling
-- `src/components/ChordDisplay.vue` — Live chord + full chord progression display
-- `src/layouts/MainLayout.vue` — Header nav tabs (Home/Analyze/Metronome), sidebar status
-- `src/boot/axios.js` — API calls: searchVideos, downloadVideo (returns Blob)
+```
+backend/
+  main.py            FastAPI app: /audiorequester/search, /audiorequester/download, /health
+  requirements.txt   fastapi, uvicorn[standard], yt-dlp
+src/
+  stores/
+    audioStore.js    Central Pinia store: video, audio, BPM, chords, metronome state
+  pages/
+    IndexPage.vue    Home: search, video select, download trigger
+    AnalyzePage.vue  BPM display, AudioPlayer, ChordDisplay
+    MetronomePage.vue Standalone metronome
+  components/
+    AudioPlayer.vue  HTML5 player + Meyda real-time analysis + offline BPM/chord detection
+    SearchBar.vue    YouTube search with debounce, error handling
+    ChordDisplay.vue Live chord + chord progression timeline
+  layouts/
+    MainLayout.vue   Header nav tabs (Home/Analyze/Metronome), live status sidebar
+  boot/
+    axios.js         API helpers: searchVideos, downloadVideo (blob)
+```
 
-## Backend (FastAPI — not in this repo)
-The frontend expects a FastAPI server at `http://127.0.0.1:8000/audiorequester` with:
-- `GET /search?query=...` → list of videos
-- `GET /download?video_id=...` → MP3 audio blob
-
-The metronome works without a backend. BPM and chord detection work once audio is downloaded.
+## Backend API
+- `GET /health` → `{"status": "ok"}`
+- `GET /audiorequester/search?query=<str>` → JSON array of `{id, videoId, title, thumbnail}`
+- `GET /audiorequester/download?video_id=<str>` → MP3 audio/mpeg binary (FileResponse)
+- CORS: open (`allow_origins=["*"]`)
+- Uses yt-dlp for search and download; ffmpeg for MP3 extraction
 
 ## Development
-- **Run**: `npm run dev` (port 5000)
+- **Frontend**: `npm run dev` (port 5000)
+- **Backend**: `uvicorn backend.main:app --host 0.0.0.0 --port 8000`
 - **Build**: `npm run build` → `dist/spa`
-- **Deployment**: static site, publicDir `dist/spa`
+- **Deployment**: static site build, publicDir `dist/spa`
 
 ## Theme
-Dark music theme: primary `#7C3AED` (purple), secondary `#06B6D4` (cyan), accent `#F59E0B` (amber), background `#0a0a14`
+Dark music theme: primary `#7C3AED` (purple), secondary `#06B6D4` (cyan), accent `#F59E0B` (amber), bg `#0a0a14`
