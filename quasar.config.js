@@ -88,13 +88,18 @@ export default defineConfig((ctx) => {
 
     // Full list of options: https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#devserver
     devServer: {
-      // https: true,
       port: 5000,
       host: '0.0.0.0',
       open: false,
       allowedHosts: 'all',
       headers: {
         'Access-Control-Allow-Origin': '*'
+      },
+      proxy: {
+        '/audiorequester': {
+          target: 'http://127.0.0.1:8000',
+          changeOrigin: true,
+        }
       }
     },
 
