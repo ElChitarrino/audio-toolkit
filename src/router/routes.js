@@ -6,6 +6,7 @@ const routes = [
       { path: '',          component: () => import('pages/IndexPage.vue') },
       { path: 'analyze',   component: () => import('pages/AnalyzePage.vue') },
       { path: 'metronome', component: () => import('pages/MetronomePage.vue') },
+      { path: 'library',   component: () => import('pages/LibraryPage.vue') },
     ]
   },
   {

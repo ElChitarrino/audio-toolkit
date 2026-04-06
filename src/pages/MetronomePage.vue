@@ -36,13 +36,13 @@
 
       <div class="q-mb-lg q-px-xl">
         <q-slider
-          v-model="audioStore.metronome.bpm"
+          v-model="localBpm"
           :min="40"
           :max="240"
           :step="1"
           color="primary"
           track-color="grey-8"
-          @update:model-value="onBpmChange"
+          @update:model-value="onSliderChange"
         />
         <div class="row justify-between text-caption text-grey-7">
           <span>40</span><span>Slow</span><span>Medium</span><span>Fast</span><span>240</span>
@@ -69,32 +69,30 @@
 
       <div class="row justify-center q-gutter-md q-mb-lg">
         <q-btn
-          round
-          size="xl"
+          round size="xl"
           :color="audioStore.metronome.isRunning ? 'negative' : 'primary'"
           :icon="audioStore.metronome.isRunning ? 'stop' : 'play_arrow'"
+          :loading="isStarting"
           @click="toggleMetronome"
         />
         <q-btn
-          round
-          size="xl"
+          round size="xl"
           color="grey-9"
           icon="touch_app"
           @click="tapTempo"
         />
       </div>
-      <div class="row justify-center q-gutter-lg text-caption text-grey-6">
+      <div class="row justify-center q-gutter-lg text-caption text-grey-6 q-mb-lg">
         <span>{{ audioStore.metronome.isRunning ? 'Stop' : 'Start' }}</span>
         <span>Tap Tempo</span>
       </div>
 
-      <div v-if="audioStore.bpm" class="q-mt-lg">
+      <div v-if="audioStore.bpm" class="q-mt-sm">
         <q-btn
-          flat no-caps
-          color="secondary"
+          flat no-caps color="secondary"
           icon="music_note"
           :label="`Use detected BPM: ${audioStore.bpm}`"
-          @click="audioStore.useDetectedBpm()"
+          @click="useDetectedBpm"
         />
       </div>
     </div>
@@ -102,62 +100,83 @@
 </template>
 
 <script setup>
-import { ref, computed, onUnmounted, watch } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { useAudioStore } from 'src/stores/audioStore'
 
 const audioStore = useAudioStore()
 
+// Local BPM mirror — avoids v-model directly mutating the store from the slider
+const localBpm = ref(audioStore.metronome.bpm)
+watch(() => audioStore.metronome.bpm, (v) => { localBpm.value = v })
+
+const isStarting = ref(false)
+
+// ── AudioContext ────────────────────────────────────────────────────────────
 let audioCtx = null
 let schedulerTimer = null
 let nextBeatTime = 0
 let beatNumber = 0
-const lookahead = 25
-const scheduleAhead = 0.1
+const LOOKAHEAD_MS = 25      // scheduler interval
+const SCHEDULE_AHEAD = 0.1   // seconds to schedule ahead
 
-const tapTimes = ref([])
-
-const pendulumStyle = computed(() => {
-  if (!audioStore.metronome.isRunning) return {}
-  const period = (60 / audioStore.metronome.bpm) * 2
-  return { animationDuration: `${period}s` }
-})
-
-function ensureAudioCtx() {
-  if (!audioCtx) audioCtx = new AudioContext()
-  if (audioCtx.state === 'suspended') audioCtx.resume()
+async function ensureAudioCtx() {
+  if (!audioCtx) {
+    audioCtx = new AudioContext()
+  }
+  // Must await resume — AudioContext starts suspended in modern browsers
+  // until triggered by a user gesture AND explicitly resumed.
+  if (audioCtx.state !== 'running') {
+    await audioCtx.resume()
+  }
 }
 
+// ── Scheduling ──────────────────────────────────────────────────────────────
 function scheduleClick(beat, time) {
   const osc = audioCtx.createOscillator()
   const gain = audioCtx.createGain()
   osc.connect(gain)
   gain.connect(audioCtx.destination)
-  osc.frequency.value = beat === 0 ? 1050 : 820
-  gain.gain.setValueAtTime(beat === 0 ? 0.9 : 0.6, time)
-  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.04)
-  osc.start(time)
-  osc.stop(time + 0.04)
 
-  const delay = (time - audioCtx.currentTime) * 1000
+  // Beat 1 accent: higher pitch, louder
+  osc.type = 'sine'
+  osc.frequency.value = beat === 0 ? 1050 : 800
+  gain.gain.setValueAtTime(0, audioCtx.currentTime)
+  gain.gain.setValueAtTime(beat === 0 ? 0.9 : 0.6, time)
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05)
+
+  osc.start(time)
+  osc.stop(time + 0.05)
+
+  // Visual beat indicator — fire just before the click lands
+  const delayMs = Math.max(0, (time - audioCtx.currentTime) * 1000 - 15)
   setTimeout(() => {
     audioStore.setCurrentBeat(beat)
-  }, Math.max(0, delay - 10))
+  }, delayMs)
 }
 
 function scheduler() {
-  while (nextBeatTime < audioCtx.currentTime + scheduleAhead) {
+  if (!audioCtx) return
+  while (nextBeatTime < audioCtx.currentTime + SCHEDULE_AHEAD) {
     scheduleClick(beatNumber, nextBeatTime)
-    nextBeatTime += 60 / audioStore.metronome.bpm
+    const secondsPerBeat = 60 / audioStore.metronome.bpm
+    nextBeatTime += secondsPerBeat
     beatNumber = (beatNumber + 1) % audioStore.metronome.timeSignature
   }
 }
 
-function startMetronome() {
-  ensureAudioCtx()
-  beatNumber = 0
-  nextBeatTime = audioCtx.currentTime + 0.05
-  schedulerTimer = setInterval(scheduler, lookahead)
-  audioStore.setMetronomeRunning(true)
+async function startMetronome() {
+  isStarting.value = true
+  try {
+    await ensureAudioCtx()
+    beatNumber = 0
+    // Set nextBeatTime AFTER context is running — currentTime is valid now
+    nextBeatTime = audioCtx.currentTime + 0.05
+    clearInterval(schedulerTimer)
+    schedulerTimer = setInterval(scheduler, LOOKAHEAD_MS)
+    audioStore.setMetronomeRunning(true)
+  } finally {
+    isStarting.value = false
+  }
 }
 
 function stopMetronome() {
@@ -167,56 +186,72 @@ function stopMetronome() {
   audioStore.setCurrentBeat(0)
 }
 
-function toggleMetronome() {
+function restartIfRunning() {
   if (audioStore.metronome.isRunning) {
     stopMetronome()
-  } else {
-    startMetronome()
+    setTimeout(() => startMetronome(), 30)
   }
 }
 
-function changeBpm(delta) {
-  audioStore.setMetronomeBpm(audioStore.metronome.bpm + delta)
-  if (audioStore.metronome.isRunning) restartMetronome()
+async function toggleMetronome() {
+  if (audioStore.metronome.isRunning) {
+    stopMetronome()
+  } else {
+    await startMetronome()
+  }
 }
 
-function onBpmChange() {
-  audioStore.setMetronomeBpm(audioStore.metronome.bpm)
-  if (audioStore.metronome.isRunning) restartMetronome()
+// ── Controls ────────────────────────────────────────────────────────────────
+function changeBpm(delta) {
+  audioStore.setMetronomeBpm(audioStore.metronome.bpm + delta)
+  localBpm.value = audioStore.metronome.bpm
+  restartIfRunning()
+}
+
+function onSliderChange(val) {
+  audioStore.setMetronomeBpm(val)
+  restartIfRunning()
 }
 
 function onTimeSigChange() {
-  if (audioStore.metronome.isRunning) restartMetronome()
+  restartIfRunning()
 }
 
-function restartMetronome() {
-  stopMetronome()
-  setTimeout(startMetronome, 50)
+function useDetectedBpm() {
+  audioStore.useDetectedBpm()
+  localBpm.value = audioStore.metronome.bpm
+  restartIfRunning()
 }
 
+const tapTimes_ = []
 function tapTempo() {
-  const now = Date.now()
-  tapTimes.value.push(now)
-  if (tapTimes.value.length > 8) tapTimes.value.shift()
+  const now = performance.now()
+  tapTimes_.push(now)
+  if (tapTimes_.length > 8) tapTimes_.shift()
 
-  if (tapTimes.value.length >= 2) {
+  if (tapTimes_.length >= 2) {
     const gaps = []
-    for (let i = 1; i < tapTimes.value.length; i++) {
-      gaps.push(tapTimes.value[i] - tapTimes.value[i - 1])
+    for (let i = 1; i < tapTimes_.length; i++) {
+      gaps.push(tapTimes_[i] - tapTimes_[i - 1])
     }
     const avgGap = gaps.reduce((a, b) => a + b, 0) / gaps.length
     const bpm = Math.round(60000 / avgGap)
     audioStore.setMetronomeBpm(bpm)
-    if (audioStore.metronome.isRunning) restartMetronome()
+    localBpm.value = audioStore.metronome.bpm
+    restartIfRunning()
   }
 
-  if (tapTimes.value.length === 1 && !audioStore.metronome.isRunning) {
+  // Auto-start on first tap
+  if (!audioStore.metronome.isRunning) {
     startMetronome()
   }
 }
 
-watch(() => audioStore.metronome.bpm, () => {
-  if (audioStore.metronome.isRunning) restartMetronome()
+// ── Pendulum ────────────────────────────────────────────────────────────────
+const pendulumStyle = computed(() => {
+  if (!audioStore.metronome.isRunning) return {}
+  const period = (60 / audioStore.metronome.bpm) * 2
+  return { animationDuration: `${period}s` }
 })
 
 onUnmounted(() => {
@@ -226,21 +261,15 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.metronome-page {
-  background: transparent;
-}
-.metronome-inner {
-  width: 100%;
-  max-width: 420px;
-}
+.metronome-page { background: transparent; }
+.metronome-inner { width: 100%; max-width: 420px; }
 
 .pendulum-container {
-  height: 200px;
+  height: 220px;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
-
 .pendulum-track {
   position: relative;
   width: 200px;
@@ -249,7 +278,6 @@ onUnmounted(() => {
   justify-content: center;
   align-items: flex-start;
 }
-
 .pendulum-arm {
   position: absolute;
   top: 0;
@@ -260,16 +288,13 @@ onUnmounted(() => {
   transform-origin: top center;
   transform: rotate(0deg);
 }
-
 .pendulum-arm.is-running {
   animation: swing linear infinite alternate;
 }
-
 @keyframes swing {
   from { transform: rotate(-40deg); }
   to   { transform: rotate(40deg); }
 }
-
 .pendulum-bob {
   position: absolute;
   bottom: -14px;
@@ -280,22 +305,18 @@ onUnmounted(() => {
   background: #7C3AED;
   border-radius: 50%;
   box-shadow: 0 0 12px rgba(124,58,237,0.5);
-  transition: background 0.1s;
+  transition: background 0.08s, box-shadow 0.08s;
 }
 .pendulum-bob.accent {
   background: #06B6D4;
-  box-shadow: 0 0 16px rgba(6,182,212,0.7);
+  box-shadow: 0 0 18px rgba(6,182,212,0.9);
 }
-
-.beat-lights {
-  margin-top: auto;
-}
+.beat-lights { margin-top: auto; }
 .beat-light {
-  width: 14px;
-  height: 14px;
+  width: 14px; height: 14px;
   border-radius: 50%;
   background: #333;
-  transition: background 0.08s, box-shadow 0.08s;
+  transition: background 0.06s, box-shadow 0.06s;
 }
 .beat-light.active {
   background: #7C3AED;
@@ -303,9 +324,8 @@ onUnmounted(() => {
 }
 .beat-light.active.accent {
   background: #06B6D4;
-  box-shadow: 0 0 10px rgba(6,182,212,0.9);
+  box-shadow: 0 0 12px rgba(6,182,212,1);
 }
-
 .bpm-display {
   display: flex;
   align-items: center;

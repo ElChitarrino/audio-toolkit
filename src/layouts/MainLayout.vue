@@ -24,7 +24,8 @@
         >
           <q-route-tab name="home"      to="/"          icon="home"      label="Home" />
           <q-route-tab name="analyze"   to="/analyze"   icon="analytics" label="Analyze" />
-          <q-route-tab name="metronome" to="/metronome" icon="timer"     label="Metronome" />
+          <q-route-tab name="metronome" to="/metronome" icon="timer"         label="Metronome" />
+          <q-route-tab name="library"   to="/library"   icon="library_music" label="Library" />
         </q-tabs>
       </q-toolbar>
     </q-header>
@@ -52,6 +53,11 @@
         <q-item clickable v-ripple to="/metronome" active-class="drawer-active">
           <q-item-section avatar><q-icon name="timer" /></q-item-section>
           <q-item-section>Metronome</q-item-section>
+        </q-item>
+
+        <q-item clickable v-ripple to="/library" active-class="drawer-active">
+          <q-item-section avatar><q-icon name="library_music" /></q-item-section>
+          <q-item-section>Library</q-item-section>
         </q-item>
 
         <q-separator class="q-my-md" />

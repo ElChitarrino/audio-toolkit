@@ -44,3 +44,7 @@ dist/
 
 # yt-dlp temp downloads
 /tmp/audiotk_*
+
+# Track library
+backend/library/*.mp3
+backend/library/index.json

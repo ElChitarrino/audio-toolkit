@@ -250,11 +250,21 @@ function stopMeydaAnalysis() {
   }
 }
 
+/** Returns the audio blob, fetching it from the server if not already in store */
+async function getAudioBlob() {
+  if (audioStore.audioBlob) return audioStore.audioBlob
+  if (!audioStore.audioUrl) return null
+  const res = await fetch(audioStore.audioUrl)
+  if (!res.ok) throw new Error(`Failed to fetch audio (${res.status})`)
+  return await res.blob()
+}
+
 async function detectBpm() {
-  if (!audioStore.audioBlob) return
   isDetectingBpm.value = true
   try {
-    const arrayBuffer = await audioStore.audioBlob.arrayBuffer()
+    const blob = await getAudioBlob()
+    if (!blob) return
+    const arrayBuffer = await blob.arrayBuffer()
     const offlineCtx = new OfflineAudioContext(1, 44100 * 60, 44100)
     const decoded = await offlineCtx.decodeAudioData(arrayBuffer)
     const bpm = estimateBpm(decoded)
@@ -309,11 +319,12 @@ function estimateBpm(audioBuffer) {
 }
 
 async function startChordAnalysis() {
-  if (!audioStore.audioBlob) return
   isAnalyzingChords.value = true
   audioStore.setChords([])
   try {
-    const arrayBuffer = await audioStore.audioBlob.arrayBuffer()
+    const blob = await getAudioBlob()
+    if (!blob) { isAnalyzingChords.value = false; return }
+    const arrayBuffer = await blob.arrayBuffer()
     const offCtx = new OfflineAudioContext(1, 44100 * 300, 44100)
     const decoded = await offCtx.decodeAudioData(arrayBuffer)
     const chords = analyzeChordsFull(decoded)
