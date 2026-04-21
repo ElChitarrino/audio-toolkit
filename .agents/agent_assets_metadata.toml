@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "cdzqbs5Nt5_ncswDUMFaw"
+uri = "file://research/audio-analysis-options.md"
+type = "text"
+title = "Audio Analysis Research — Pulse, Chord & Metronome"
