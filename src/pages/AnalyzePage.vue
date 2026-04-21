@@ -52,6 +52,10 @@
           <div class="col-12 col-md-8">
             <ChordDisplay />
           </div>
+
+          <div class="col-12">
+            <LyricsDisplay />
+          </div>
         </div>
       </template>
     </div>
@@ -62,6 +66,7 @@
 import { useAudioStore } from 'src/stores/audioStore'
 import AudioPlayer from 'src/components/AudioPlayer.vue'
 import ChordDisplay from 'src/components/ChordDisplay.vue'
+import LyricsDisplay from 'src/components/LyricsDisplay.vue'
 
 const audioStore = useAudioStore()
 </script>

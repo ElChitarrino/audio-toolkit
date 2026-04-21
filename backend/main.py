@@ -12,6 +12,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
+from backend.analysis import detect_chords, fetch_youtube_lyrics
+
 app = FastAPI(title="Audio Toolkit Backend")
 
 app.add_middleware(
@@ -190,6 +192,48 @@ async def delete_track(video_id: str):
     index.pop(video_id, None)
     _save_index(index)
     return {"deleted": video_id}
+
+
+# ── Analysis (chords + lyrics) ────────────────────────────────────────────────
+
+# In-memory cache so the second request for the same track is instant
+_chord_cache: dict = {}
+_lyrics_cache: dict = {}
+
+
+@app.get("/audiorequester/chords/{video_id}")
+async def analyze_chords(video_id: str):
+    if not _valid_video_id(video_id):
+        raise HTTPException(status_code=400, detail="Invalid video_id")
+    if video_id in _chord_cache:
+        return _chord_cache[video_id]
+    mp3 = LIBRARY_DIR / f"{video_id}.mp3"
+    if not mp3.exists():
+        raise HTTPException(status_code=404, detail="Track not in library — download first")
+    try:
+        result = await asyncio.to_thread(detect_chords, mp3)
+        _chord_cache[video_id] = result
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Chord analysis failed: {e}")
+
+
+@app.get("/audiorequester/lyrics/{video_id}")
+async def get_lyrics(video_id: str):
+    if not _valid_video_id(video_id):
+        raise HTTPException(status_code=400, detail="Invalid video_id")
+    if video_id in _lyrics_cache:
+        return _lyrics_cache[video_id]
+    try:
+        cues = await asyncio.to_thread(fetch_youtube_lyrics, video_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lyrics fetch failed: {e}")
+    if not cues:
+        result = {"available": False, "lines": []}
+    else:
+        result = {"available": True, "lines": cues}
+    _lyrics_cache[video_id] = result
+    return result
 
 
 @app.get("/health")

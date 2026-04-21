@@ -10,7 +10,8 @@ A Vue 3 + Quasar Framework web application for music enthusiasts. Search YouTube
 - **State Management**: Pinia (`src/stores/audioStore.js`)
 - **Routing**: Vue Router — routes: `/`, `/analyze`, `/metronome`, `/library`
 - **HTTP Client**: Axios — relative path `/audiorequester` (proxied by Vite dev server)
-- **Audio Analysis**: Meyda.js (chromagram for chord detection), Web Audio API for BPM
+- **Audio Analysis**: Backend `librosa` (CQT chromagram + Viterbi-smoothed chord detection); Web Audio API for client-side BPM
+- **Lyrics**: YouTube auto-captions via `yt-dlp` (VTT parsed server-side)
 - **Styling**: SCSS + Quasar components, dark music theme
 
 ## Workflows
@@ -21,14 +22,16 @@ A Vue 3 + Quasar Framework web application for music enthusiasts. Search YouTube
 - **YouTube Search** — `GET /audiorequester/search?query=...` (yt-dlp `ytsearch10`)
 - **Audio Download** — `GET /audiorequester/download?video_id=...` — saves MP3 to `backend/library/` and returns the file. If already downloaded, serves immediately.
 - **BPM / Tempo Detection** — client-side autocorrelation on energy envelope (offline)
-- **Chord Detection** — real-time Meyda.js chromagram + offline full-file analysis
-- **Metronome** — Web Audio API click track (async AudioContext resume), visual pendulum, tap-tempo, time signatures
+- **Chord Detection** — `GET /audiorequester/chords/{video_id}` — librosa HPSS + CQT chromagram + 24-template matching + Viterbi smoothing + min-duration merging. Returns `{key, duration, chords:[{chord,start,end,confidence}]}`. Cached per track.
+- **Lyrics** — `GET /audiorequester/lyrics/{video_id}` — `yt-dlp` fetches YouTube subtitles (manual or auto), parses VTT, dedupes rolling caption repeats. Returns `{available, lines:[{text,start,end}]}`. Cached per track.
+- **Metronome** — Web Audio API: looping wood-block click (triangle + bandpass-noise transient), pendulum + beat lights driven by `audioCtx.currentTime` via rAF (sample-accurate visual sync), tap-tempo with 2s reset
 - **Track Library** — persisted downloads: `backend/library/{video_id}.mp3` + `index.json`. Tracks load directly from library without re-downloading.
 
 ## Project Structure
 ```
 backend/
-  main.py            FastAPI: search, download, library list/serve/delete, health
+  main.py            FastAPI: search, download, library, chords, lyrics, health
+  analysis.py        librosa chord detection + yt-dlp YouTube subtitle parser
   library/           MP3 files + index.json (gitignored)
 src/
   stores/

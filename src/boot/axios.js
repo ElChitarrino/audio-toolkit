@@ -26,3 +26,13 @@ export const deleteTrack = async (videoId) => {
 }
 
 export const getAudioUrl = (videoId) => `${API}/audio/${videoId}`
+
+export const analyzeChords = async (videoId) => {
+  const response = await axios.get(`${API}/chords/${videoId}`, { timeout: 120000 })
+  return response.data
+}
+
+export const fetchLyrics = async (videoId) => {
+  const response = await axios.get(`${API}/lyrics/${videoId}`, { timeout: 60000 })
+  return response.data
+}
