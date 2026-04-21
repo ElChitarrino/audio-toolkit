@@ -6,10 +6,9 @@
         <div class="pendulum-track">
           <div
             class="pendulum-arm"
-            :class="{ 'is-running': audioStore.metronome.isRunning }"
-            :style="pendulumStyle"
+            :style="{ transform: `rotate(${pendulumAngle}deg)` }"
           >
-            <div class="pendulum-bob" :class="{ accent: audioStore.metronome.currentBeat === 0 }" />
+            <div class="pendulum-bob" :class="{ accent: audioStore.metronome.currentBeat === 0 && audioStore.metronome.isRunning }" />
           </div>
         </div>
 
@@ -84,7 +83,10 @@
       </div>
       <div class="row justify-center q-gutter-lg text-caption text-grey-6 q-mb-lg">
         <span>{{ audioStore.metronome.isRunning ? 'Stop' : 'Start' }}</span>
-        <span>Tap Tempo</span>
+        <span>
+          Tap Tempo
+          <span v-if="tapCount > 0" class="text-primary">({{ tapCount }})</span>
+        </span>
       </div>
 
       <div v-if="audioStore.bpm" class="q-mt-sm">
@@ -100,44 +102,45 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, watch, onUnmounted } from 'vue'
 import { useAudioStore } from 'src/stores/audioStore'
 
 const audioStore = useAudioStore()
 
-// Local BPM mirror — avoids v-model directly mutating the store from the slider
+// Local BPM mirror for the slider
 const localBpm = ref(audioStore.metronome.bpm)
 watch(() => audioStore.metronome.bpm, (v) => { localBpm.value = v })
 
 const isStarting = ref(false)
+const pendulumAngle = ref(0)
+const tapCount = ref(0)
 
 // ── AudioContext ────────────────────────────────────────────────────────────
 let audioCtx = null
 let schedulerTimer = null
+let visualRafId = null
 let nextBeatTime = 0
+let firstBeatTime = 0   // audioCtx time of beat 0 — anchors all visuals
 let beatNumber = 0
-const LOOKAHEAD_MS = 25      // scheduler interval
-const SCHEDULE_AHEAD = 0.1   // seconds to schedule ahead
+const LOOKAHEAD_MS = 25
+const SCHEDULE_AHEAD = 0.1
 
 async function ensureAudioCtx() {
   if (!audioCtx) {
     audioCtx = new AudioContext()
   }
-  // Must await resume — AudioContext starts suspended in modern browsers
-  // until triggered by a user gesture AND explicitly resumed.
   if (audioCtx.state !== 'running') {
     await audioCtx.resume()
   }
 }
 
-// ── Scheduling ──────────────────────────────────────────────────────────────
+// ── Audio scheduling ────────────────────────────────────────────────────────
 function scheduleClick(beat, time) {
   const osc = audioCtx.createOscillator()
   const gain = audioCtx.createGain()
   osc.connect(gain)
   gain.connect(audioCtx.destination)
 
-  // Beat 1 accent: higher pitch, louder
   osc.type = 'sine'
   osc.frequency.value = beat === 0 ? 1050 : 800
   gain.gain.setValueAtTime(0, audioCtx.currentTime)
@@ -146,12 +149,6 @@ function scheduleClick(beat, time) {
 
   osc.start(time)
   osc.stop(time + 0.05)
-
-  // Visual beat indicator — fire just before the click lands
-  const delayMs = Math.max(0, (time - audioCtx.currentTime) * 1000 - 15)
-  setTimeout(() => {
-    audioStore.setCurrentBeat(beat)
-  }, delayMs)
 }
 
 function scheduler() {
@@ -164,16 +161,42 @@ function scheduler() {
   }
 }
 
+// ── Visual loop driven by the audio clock (perfect sync) ───────────────────
+function visualLoop() {
+  if (!audioStore.metronome.isRunning || !audioCtx) {
+    visualRafId = null
+    return
+  }
+  const t = audioCtx.currentTime
+  const spb = 60 / audioStore.metronome.bpm
+  const elapsed = Math.max(0, t - firstBeatTime)
+
+  // Pendulum: one full back-and-forth = 2 beats
+  // Cosine motion mimics a real metronome (slows at extremes)
+  pendulumAngle.value = -40 * Math.cos(Math.PI * elapsed / spb)
+
+  // Beat index synced to audio clock
+  const beatIdx = Math.floor(elapsed / spb) % audioStore.metronome.timeSignature
+  if (audioStore.metronome.currentBeat !== beatIdx) {
+    audioStore.setCurrentBeat(beatIdx)
+  }
+
+  visualRafId = requestAnimationFrame(visualLoop)
+}
+
+// ── Lifecycle ───────────────────────────────────────────────────────────────
 async function startMetronome() {
   isStarting.value = true
   try {
     await ensureAudioCtx()
     beatNumber = 0
-    // Set nextBeatTime AFTER context is running — currentTime is valid now
-    nextBeatTime = audioCtx.currentTime + 0.05
+    nextBeatTime = audioCtx.currentTime + 0.1
+    firstBeatTime = nextBeatTime
     clearInterval(schedulerTimer)
     schedulerTimer = setInterval(scheduler, LOOKAHEAD_MS)
     audioStore.setMetronomeRunning(true)
+    cancelAnimationFrame(visualRafId)
+    visualRafId = requestAnimationFrame(visualLoop)
   } finally {
     isStarting.value = false
   }
@@ -182,8 +205,11 @@ async function startMetronome() {
 function stopMetronome() {
   clearInterval(schedulerTimer)
   schedulerTimer = null
+  cancelAnimationFrame(visualRafId)
+  visualRafId = null
   audioStore.setMetronomeRunning(false)
   audioStore.setCurrentBeat(0)
+  pendulumAngle.value = 0
 }
 
 function restartIfRunning() {
@@ -223,36 +249,36 @@ function useDetectedBpm() {
   restartIfRunning()
 }
 
-const tapTimes_ = []
+// ── Tap Tempo ───────────────────────────────────────────────────────────────
+const TAP_RESET_MS = 2000   // gap >2s = new tap session
+const tapTimes = []
+
 function tapTempo() {
   const now = performance.now()
-  tapTimes_.push(now)
-  if (tapTimes_.length > 8) tapTimes_.shift()
 
-  if (tapTimes_.length >= 2) {
-    const gaps = []
-    for (let i = 1; i < tapTimes_.length; i++) {
-      gaps.push(tapTimes_[i] - tapTimes_[i - 1])
-    }
-    const avgGap = gaps.reduce((a, b) => a + b, 0) / gaps.length
-    const bpm = Math.round(60000 / avgGap)
+  // Reset if the previous tap is too old — user clearly started over
+  if (tapTimes.length > 0 && now - tapTimes[tapTimes.length - 1] > TAP_RESET_MS) {
+    tapTimes.length = 0
+  }
+
+  tapTimes.push(now)
+  if (tapTimes.length > 6) tapTimes.shift()
+  tapCount.value = tapTimes.length
+
+  if (tapTimes.length < 2) return
+
+  // Average the inter-tap intervals
+  let sum = 0
+  for (let i = 1; i < tapTimes.length; i++) sum += tapTimes[i] - tapTimes[i - 1]
+  const avgGap = sum / (tapTimes.length - 1)
+  const bpm = Math.round(60000 / avgGap)
+
+  if (bpm >= 40 && bpm <= 240) {
     audioStore.setMetronomeBpm(bpm)
     localBpm.value = audioStore.metronome.bpm
     restartIfRunning()
   }
-
-  // Auto-start on first tap
-  if (!audioStore.metronome.isRunning) {
-    startMetronome()
-  }
 }
-
-// ── Pendulum ────────────────────────────────────────────────────────────────
-const pendulumStyle = computed(() => {
-  if (!audioStore.metronome.isRunning) return {}
-  const period = (60 / audioStore.metronome.bpm) * 2
-  return { animationDuration: `${period}s` }
-})
 
 onUnmounted(() => {
   stopMetronome()
@@ -286,14 +312,8 @@ onUnmounted(() => {
   background: linear-gradient(to bottom, #7C3AED, #4C1D95);
   border-radius: 2px;
   transform-origin: top center;
-  transform: rotate(0deg);
-}
-.pendulum-arm.is-running {
-  animation: swing linear infinite alternate;
-}
-@keyframes swing {
-  from { transform: rotate(-40deg); }
-  to   { transform: rotate(40deg); }
+  /* No CSS animation — angle is driven by JS from the audio clock */
+  will-change: transform;
 }
 .pendulum-bob {
   position: absolute;
