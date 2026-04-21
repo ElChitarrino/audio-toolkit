@@ -135,20 +135,61 @@ async function ensureAudioCtx() {
 }
 
 // ── Audio scheduling ────────────────────────────────────────────────────────
+// Pre-built short noise buffer — reused for every click (cheap, low GC)
+let noiseBuffer = null
+function getNoiseBuffer() {
+  if (noiseBuffer) return noiseBuffer
+  const len = Math.floor(audioCtx.sampleRate * 0.05)   // 50ms of noise
+  noiseBuffer = audioCtx.createBuffer(1, len, audioCtx.sampleRate)
+  const data = noiseBuffer.getChannelData(0)
+  for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1
+  return noiseBuffer
+}
+
+/**
+ * Synthesize a percussive "wood block" click:
+ *  - Pitched body: short sine burst (a tone is what gives the click its pitch)
+ *  - Transient: bandpass-filtered noise burst (gives the sharp "tick" attack)
+ *  - Both share a fast exponential decay (~40ms) — sounds like a real metronome
+ */
 function scheduleClick(beat, time) {
+  const isAccent = beat === 0
+
+  // Per-beat tuning
+  const toneFreq   = isAccent ? 1500 : 1100
+  const noiseFreq  = isAccent ? 4000 : 3000
+  const toneLevel  = isAccent ? 0.55 : 0.4
+  const noiseLevel = isAccent ? 0.7  : 0.5
+  const decay      = 0.04                       // 40 ms — short, punchy
+
+  // ── Tone body ────────────────────────────────────────────────────────────
   const osc = audioCtx.createOscillator()
-  const gain = audioCtx.createGain()
-  osc.connect(gain)
-  gain.connect(audioCtx.destination)
-
-  osc.type = 'sine'
-  osc.frequency.value = beat === 0 ? 1050 : 800
-  gain.gain.setValueAtTime(0, audioCtx.currentTime)
-  gain.gain.setValueAtTime(beat === 0 ? 0.9 : 0.6, time)
-  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05)
-
+  const oscGain = audioCtx.createGain()
+  osc.type = 'triangle'
+  osc.frequency.setValueAtTime(toneFreq, time)
+  // Slight downward pitch sweep — gives a more "knock"-like character
+  osc.frequency.exponentialRampToValueAtTime(toneFreq * 0.5, time + decay)
+  oscGain.gain.setValueAtTime(0.0001, time)
+  oscGain.gain.exponentialRampToValueAtTime(toneLevel, time + 0.001)   // 1 ms attack
+  oscGain.gain.exponentialRampToValueAtTime(0.0001, time + decay)
+  osc.connect(oscGain).connect(audioCtx.destination)
   osc.start(time)
-  osc.stop(time + 0.05)
+  osc.stop(time + decay + 0.01)
+
+  // ── Noise transient ──────────────────────────────────────────────────────
+  const noise = audioCtx.createBufferSource()
+  noise.buffer = getNoiseBuffer()
+  const bp = audioCtx.createBiquadFilter()
+  bp.type = 'bandpass'
+  bp.frequency.value = noiseFreq
+  bp.Q.value = 1.5
+  const noiseGain = audioCtx.createGain()
+  noiseGain.gain.setValueAtTime(0.0001, time)
+  noiseGain.gain.exponentialRampToValueAtTime(noiseLevel, time + 0.001)
+  noiseGain.gain.exponentialRampToValueAtTime(0.0001, time + decay * 0.5) // noise dies faster
+  noise.connect(bp).connect(noiseGain).connect(audioCtx.destination)
+  noise.start(time)
+  noise.stop(time + decay)
 }
 
 function scheduler() {
