@@ -11,6 +11,7 @@ import yt_dlp
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from backend.analysis import detect_chords, fetch_youtube_lyrics
 
@@ -239,3 +240,10 @@ async def get_lyrics(video_id: str):
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+# ── Serve built frontend (production) ────────────────────────────────────────
+# Mount AFTER all API routes so /audiorequester/* is matched first.
+_SPA_DIR = Path("dist/spa")
+if _SPA_DIR.exists():
+    app.mount("/", StaticFiles(directory=str(_SPA_DIR), html=True), name="spa")
