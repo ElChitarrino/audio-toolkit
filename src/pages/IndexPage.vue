@@ -29,7 +29,7 @@
           </div>
         </div>
 
-        <div class="q-mt-md row q-gutter-sm">
+        <div class="q-mt-md row q-gutter-sm justify-center">
           <q-btn
             color="primary"
             icon="download"

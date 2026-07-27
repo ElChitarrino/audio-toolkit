@@ -36,26 +36,27 @@
       bordered
       :width="220"
       class="bg-dark-drawer"
+      dark
     >
       <q-list padding>
         <q-item-label header class="text-grey-5 text-caption">Navigation</q-item-label>
 
-        <q-item clickable v-ripple to="/" exact active-class="drawer-active">
+        <q-item clickable v-ripple to="/" exact active-class="drawer-active" class="drawer-nav-item">
           <q-item-section avatar><q-icon name="home" /></q-item-section>
           <q-item-section>Home</q-item-section>
         </q-item>
 
-        <q-item clickable v-ripple to="/analyze" active-class="drawer-active">
+        <q-item clickable v-ripple to="/analyze" active-class="drawer-active" class="drawer-nav-item">
           <q-item-section avatar><q-icon name="analytics" /></q-item-section>
           <q-item-section>Analyze</q-item-section>
         </q-item>
 
-        <q-item clickable v-ripple to="/metronome" active-class="drawer-active">
+        <q-item clickable v-ripple to="/metronome" active-class="drawer-active" class="drawer-nav-item">
           <q-item-section avatar><q-icon name="timer" /></q-item-section>
           <q-item-section>Metronome</q-item-section>
         </q-item>
 
-        <q-item clickable v-ripple to="/library" active-class="drawer-active">
+        <q-item clickable v-ripple to="/library" active-class="drawer-active" class="drawer-nav-item">
           <q-item-section avatar><q-icon name="library_music" /></q-item-section>
           <q-item-section>Library</q-item-section>
         </q-item>
@@ -130,8 +131,17 @@ function toggleDrawer() {
   background: #0f0f1e;
   border-right: 1px solid rgba(255,255,255,0.06);
 }
+.drawer-nav-item :deep(.q-item__section),
+.drawer-nav-item :deep(.q-item__label),
+.drawer-nav-item :deep(.q-icon) {
+  color: #e2e8f0 !important;
+}
+.drawer-active :deep(.q-item__section),
+.drawer-active :deep(.q-item__label),
+.drawer-active :deep(.q-icon) {
+  color: #7C3AED !important;
+}
 .drawer-active {
-  color: #7C3AED;
   background: rgba(124,58,237,0.1);
 }
 </style>
